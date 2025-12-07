@@ -21,8 +21,25 @@ export class Store {
                 value = Number(trimmed);
             }
         }
-        this.data.set(topic, value);
+
+        // Recursively flatten and store
+        this.storeRecursive(topic, value);
         // console.log(`Stored ${topic}:`, value);
+    }
+
+    private storeRecursive(path: string, value: TopicValue) {
+        // Always store the current node
+        this.data.set(path, value);
+
+        // If it's an object, recurse
+        if (typeof value === 'object' && value !== null) {
+            for (const key of Object.keys(value)) {
+                // Sanitize key to avoid path weirdness if needed,
+                // but for now simple slash appending is best for direct mapping.
+                // We cast value as any to access keys of unknown object
+                this.storeRecursive(`${path}/${key}`, (value as any)[key]);
+            }
+        }
     }
 
     get(topic: string) {
