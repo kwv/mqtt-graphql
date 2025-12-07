@@ -5,7 +5,6 @@ COPY package*.json ./
 COPY tsconfig.json ./
 RUN npm ci
 COPY src ./src
-COPY tests ./tests
 RUN npm run build
 
 # Stage 2: Production Dependencies (Distroless has no npm)
