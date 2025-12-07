@@ -11,9 +11,11 @@ permissions:
   contents: write
 
 jobs:
-  auto-release:
+  bump-version:
     if: github.event.pull_request.merged == true && startsWith(github.head_ref, 'dependabot/')
     runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.bump.outputs.tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,5 +28,19 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Bump version and push tag
+        id: bump
         run: |
-            make bump
+            # Bump version (creates commit and tag)
+            NEW_VERSION=$(npm version patch)
+            # Push commit and tags
+            git push --follow-tags
+            # Output the new tag (e.g., v1.0.1)
+            echo "tag=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+  trigger-publish:
+    needs: bump-version
+    if: needs.bump-version.outputs.new_tag != ''
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      tag: ${{ needs.bump-version.outputs.new_tag }}
+    secrets: inherit
