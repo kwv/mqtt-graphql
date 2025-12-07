@@ -1,0 +1,157 @@
+name: Docker Hub Cleanup
+
+on:
+  schedule:
+    - cron: "0 4 * * 0"  # every Sunday at 04:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry Run (true/false)'
+        required: true
+        default: 'true'
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    env:
+      NAMESPACE: kwv4
+      REPO: mqtt-graphql
+      KEEP_RECENT: '2'
+      OLDER_THAN_DAYS: '15'
+      PROTECTED_REGEX: '^(latest|stable|dev)$'
+      DRY_RUN: ${{ inputs.dry_run || 'true' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for git tags
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl
+
+      - name: Cleanup Docker and Git Tags
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKERHUB_USER }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -e
+          
+          echo " Starting cleanup for $NAMESPACE/$REPO"
+          echo " DRY_RUN: $DRY_RUN"
+          echo " KEEP_RECENT: $KEEP_RECENT"
+          
+          # 1. Authenticate with Docker Hub
+          echo " Authenticating with Docker Hub..."
+          TOKEN=$(curl -s -H "Content-Type: application/json" -X POST -d '{"username": "'${DOCKER_USERNAME}'", "password": "'${DOCKER_PASSWORD}'"}' https://hub.docker.com/v2/users/login/ | jq -r .token)
+          
+          if [ "$TOKEN" == "null" ] || [ -z "$TOKEN" ]; then
+            echo "::error::Failed to authenticate with Docker Hub"
+            exit 1
+          fi
+
+          # 2. Fetch all tags
+          echo " Fetching tags..."
+          TAGS_JSON=$(curl -s -H "Authorization: JWT $TOKEN" "https://hub.docker.com/v2/repositories/$NAMESPACE/$REPO/tags/?page_size=100")
+          
+          # 3. Identify special tags and their digests
+          LATEST_DIGEST=$(echo "$TAGS_JSON" | jq -r '.results[] | select(.name == "latest") | .images[0].digest')
+          echo " 'latest' digest: $LATEST_DIGEST"
+          
+          # 4. Filter and Process Tags
+          # Get list of version tags sorted by date (newest first)
+          echo " Analyzing tags..."
+          ALL_TAGS=$(echo "$TAGS_JSON" | jq -r '.results[] | select(.name | test("^(latest|stable|dev)$") | not) | "\(.name)|\(.last_updated)|\(.images[0].digest)"' | sort -t "|" -k2 -r)
+          
+          # Pass 1: Plan and Identify Kept Digests
+          TAG_PLAN=""
+          KEPT_DIGESTS="$LATEST_DIGEST" # Always keep latest digest
+          COUNT=0
+          
+          IFS=$'\n'
+          for line in $ALL_TAGS; do
+            TAG_NAME=$(echo "$line" | cut -d "|" -f 1)
+            TAG_DATE=$(echo "$line" | cut -d "|" -f 2)
+            TAG_DIGEST=$(echo "$line" | cut -d "|" -f 3)
+            
+            ACTION="DELETE"
+            REASON=""
+            
+            # Logic: Keep if same as latest OR if within recent count
+            if [ "$TAG_DIGEST" == "$LATEST_DIGEST" ]; then
+                ACTION="KEEP"
+                REASON="(Matches latest)"
+            elif [ "$COUNT" -lt "$KEEP_RECENT" ]; then
+                ACTION="KEEP"
+                REASON="(Recent #$((COUNT+1)))"
+                COUNT=$((COUNT+1))
+            else
+                REASON="(Old)"
+            fi
+            
+            if [ "$ACTION" == "KEEP" ]; then
+                # Add to KEPT_DIGESTS if not present
+                if [[ "$KEPT_DIGESTS" != *"$TAG_DIGEST"* ]]; then
+                    KEPT_DIGESTS="${KEPT_DIGESTS} ${TAG_DIGEST}"
+                fi
+            fi
+            
+            # Store plan: NAME|DATE|DIGEST|ACTION|REASON
+            TAG_PLAN="${TAG_PLAN}${TAG_NAME}|${TAG_DATE}|${TAG_DIGEST}|${ACTION}|${REASON}\n"
+          done
+          
+          echo "----------------------------------------------------------------------------------------------------------"
+          printf "%-20s %-25s %-10s %-20s %-20s\n" "TAG" "UPDATED" "ACTION" "REASON" "IMAGE STATUS"
+          echo "----------------------------------------------------------------------------------------------------------"
+
+          # Pass 2: Execute
+          printf "$TAG_PLAN" | while IFS= read -r line; do
+            if [ -z "$line" ]; then continue; fi
+            
+            TAG_NAME=$(echo "$line" | cut -d "|" -f 1)
+            TAG_DATE=$(echo "$line" | cut -d "|" -f 2)
+            TAG_DIGEST=$(echo "$line" | cut -d "|" -f 3)
+            ACTION=$(echo "$line" | cut -d "|" -f 4)
+            REASON=$(echo "$line" | cut -d "|" -f 5)
+            
+            IMAGE_STATUS=""
+            
+            if [ "$ACTION" == "DELETE" ]; then
+                if [[ "$KEPT_DIGESTS" == *"$TAG_DIGEST"* ]]; then
+                    IMAGE_STATUS="Preserved (Shared)"
+                else
+                    IMAGE_STATUS="Orphaned (Will GC)"
+                fi
+            else
+                IMAGE_STATUS="Kept"
+            fi
+            
+            printf "%-20s %-25s %-10s %-20s %-20s\n" "$TAG_NAME" "$TAG_DATE" "$ACTION" "$REASON" "$IMAGE_STATUS"
+            
+            if [ "$ACTION" == "DELETE" ]; then
+                if [ "$DRY_RUN" == "true" ]; then
+                    echo "   [DRY RUN] Would delete Docker tag: $TAG_NAME"
+                    echo "   [DRY RUN] Would delete Git tag: $TAG_NAME"
+                    if [ "$IMAGE_STATUS" == "Orphaned (Will GC)" ]; then
+                        echo "   [DRY RUN] Image manifest $TAG_DIGEST would become untagged."
+                    fi
+                else
+                    echo "   Deleting Docker tag: $TAG_NAME"
+                    RESPONSE=$(curl -s -X DELETE -H "Authorization: JWT $TOKEN" "https://hub.docker.com/v2/repositories/$NAMESPACE/$REPO/tags/$TAG_NAME/")
+                    
+                    if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+                        echo "   Deleting Git tag: $TAG_NAME"
+                        git tag -d "$TAG_NAME"
+                        git push origin --delete "$TAG_NAME" || echo "   Note: Failed to push delete for $TAG_NAME (might be already gone)"
+                    else
+                        echo "   Git tag $TAG_NAME not found locally."
+                    fi
+                fi
+            fi
+          done

@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  mqtt-graphql:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - MQTT_BROKER_URL=mqtt://mosquitto:1883
+      - MQTT_TOPIC_ROOT=#
