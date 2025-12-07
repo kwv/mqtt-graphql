@@ -6,7 +6,7 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
 
-FROM node:25-distroless
+FROM gcr.io/distroless/nodejs24-debian13
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --only=production
