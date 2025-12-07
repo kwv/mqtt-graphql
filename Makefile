@@ -3,15 +3,15 @@
 all: build
 
 build:
-	npm run build
+	bun build src/index.ts --compile --outfile=dist/server
 
 dev:
-	npm run dev
+	bun run --watch src/index.ts
 
 test:
-	npm test
+	bun test
 
 # Bump version, commit, tag, and push
 bump:
-	npm version patch
+	bun version patch
 	git push --follow-tags

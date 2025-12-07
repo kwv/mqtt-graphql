@@ -1,4 +1,4 @@
-version: '3.8'
+
 services:
   mqtt-graphql:
     image: kwv4/mqtt-graphql
