@@ -12,4 +12,4 @@ COPY package*.json ./
 RUN npm ci --only=production
 COPY --from=builder /app/dist ./dist
 USER node
-CMD ["node", "dist/src/index.js"]
+CMD ["node", "/app/dist/src/index.js"]

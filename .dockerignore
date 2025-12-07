@@ -1,0 +1,12 @@
+.git
+.github
+.vscode
+node_modules
+dist
+tests
+coverage
+*.md
+*_test.go
+Makefile
+data
+*.xml
