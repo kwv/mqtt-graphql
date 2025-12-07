@@ -1,5 +1,7 @@
+/// <reference types="jest" />
 import { store } from '../src/store';
 import { getSchema } from '../src/schema';
+import { invalidateSchema, schemaCachePromise } from '../src/mqtt';
 import { graphql } from 'graphql';
 
 describe('Schema Integration', () => {
@@ -92,6 +94,40 @@ describe('Schema Integration', () => {
             battery: 90
           }
         }
+      }
+    });
+  });
+
+  test('should refresh schema async on invalidation', async () => {
+    store.update('initial/value', '1');
+    
+    // Trigger async schema invalidation
+    invalidateSchema();
+    
+    // Wait for the promise to resolve
+    const newSchema = await schemaCachePromise;
+    expect(newSchema).toBeDefined();
+    
+    // Add a new topic after invalidation
+    store.update('new/topic', '42');
+    invalidateSchema();
+    await schemaCachePromise;
+    
+    // Query the newly added topic
+    const schema = getSchema();
+    const query = `
+      query {
+        new {
+          topic
+        }
+      }
+    `;
+    
+    const result = await graphql({ schema, source: query });
+    expect(result.errors).toBeUndefined();
+    expect(result.data).toEqual({
+      new: {
+        topic: 42
       }
     });
   });
