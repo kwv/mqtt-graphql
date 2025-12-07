@@ -36,6 +36,22 @@ describe('Store', () => {
             store.update('test/val', '123');
             expect(store.get('test/val')).toBe(123);
         });
+
+        test('should deeply flatten JSON objects', () => {
+            store.update('flatten/me', JSON.stringify({
+                a: 1,
+                b: {
+                    c: "hello"
+                }
+            }));
+
+            // Root is stored as object
+            expect(store.get('flatten/me')).toEqual({ a: 1, b: { c: "hello" } });
+            // Sub-keys are stored as individual paths
+            expect(store.get('flatten/me/a')).toBe(1);
+            expect(store.get('flatten/me/b')).toEqual({ c: "hello" });
+            expect(store.get('flatten/me/b/c')).toBe("hello");
+        });
     });
 
     describe('Wildcard Matching', () => {

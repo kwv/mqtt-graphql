@@ -78,6 +78,30 @@ query {
     value
   }
 }
+#### **Deep JSON Querying**
+When MQTT payloads are JSON objects, they are **flattened** so you can query sub-fields directly.
+If `ecowitt/value` contains `{"temp": 22, "humidity": 60}`:
+
+```graphql
+query {
+  ecowitt {
+    value {
+      temp
+      humidity
+    }
+  }
+}
+```
+
+If you need the **raw JSON object** (e.g., to see all fields without selecting them), use `_value`:
+```graphql
+query {
+  ecowitt {
+    value {
+      _value
+    }
+  }
+}
 ```
 
 ## Configuration
@@ -102,4 +126,15 @@ npm run dev
 # Build and start production
 npm run build
 npm start
+```
+
+## Programmatic Access
+
+You can query the API using standard HTTP POST requests. This is useful for integrating with other services or MCPs.
+
+### cURL Example
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query": "query { yalexs { <serialnumber> { currentValue } } }"}'
 ```

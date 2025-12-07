@@ -1,10 +1,10 @@
 {
   "name": "mqtt-graphql",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "this project is a MQTT client that subscribes to topics and then makes them queryable over graphql.   As the topics update, it regenerates a schema, and serves up information for non-mqtt aware services (such as a MCP)",
   "main": "index.js",
   "scripts": {
-    "start": "node dist/index.js",
+    "start": "node dist/src/index.js",
     "dev": "ts-node src/index.ts",
     "build": "tsc",
     "test": "jest"
@@ -14,7 +14,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kwv4/mqtt-graphql.git"
+    "url": "git+https://github.com/kwv/mqtt-graphql.git"
   },
   "type": "commonjs",
   "dependencies": {
