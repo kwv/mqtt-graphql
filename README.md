@@ -120,6 +120,10 @@ query {
 # Install dependencies
 npm install
 
+# export environment variables
+export MQTT_BROKER_URL=mqtt://broker.local:1883
+export PORT=4000
+
 # Run in dev mode (hot reload)
 npm run dev
 
