@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   mqtt-graphql:
-    build: .
+    image: kwv4/mqtt-graphql
     restart: unless-stopped
     ports:
       - "4000:4000"
