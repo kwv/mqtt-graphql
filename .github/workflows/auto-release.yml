@@ -30,11 +30,10 @@ jobs:
       - name: Bump version and push tag
         id: bump
         run: |
-            # Bump version (creates commit and tag)
-            NEW_VERSION=$(npm version patch)
-            # Push commit and tags
-            git push --follow-tags
-            # Output the new tag (e.g., v1.0.1)
+            # Use the release script to bump version, create commit, and push tags
+            npm run release
+            # Output the new tag (e.g., v0.1.2)
+            NEW_VERSION=$(git describe --tags --abbrev=0)
             echo "tag=$NEW_VERSION" >> $GITHUB_OUTPUT
 
   trigger-publish:
