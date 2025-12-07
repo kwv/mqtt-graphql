@@ -7,7 +7,7 @@
     "dev": "bun run --watch src/index.ts",
     "build": "bun build src/index.ts --compile --outfile=dist/server",
     "test": "bun test",
-    "release": "bun version patch && git push origin main --tags"
+    "release": "npm version patch && git push origin main --tags"
   },
   "keywords": [],
   "author": "",

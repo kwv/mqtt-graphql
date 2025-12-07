@@ -13,5 +13,5 @@ test:
 
 # Bump version, commit, tag, and push
 bump:
-	bun version patch
+	npm version patch
 	git push --follow-tags
