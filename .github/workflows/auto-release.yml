@@ -17,10 +17,21 @@ jobs:
     outputs:
       new_tag: ${{ steps.bump.outputs.tag }}
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install Dependencies
+        run: bun install
+
+      - name: Run Tests
+        run: bun test
 
       - name: Configure Git
         run: |
@@ -31,7 +42,7 @@ jobs:
         id: bump
         run: |
             # Use the release script to bump version, create commit, and push tags
-            npm run release
+            bun run release
             # Output the new tag (e.g., v0.1.2)
             NEW_VERSION=$(git describe --tags --abbrev=0)
             echo "tag=$NEW_VERSION" >> $GITHUB_OUTPUT

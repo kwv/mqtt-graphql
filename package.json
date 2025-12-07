@@ -4,11 +4,10 @@
   "description": "this project is a MQTT client that subscribes to topics and then makes them queryable over graphql.   As the topics update, it regenerates a schema, and serves up information for non-mqtt aware services (such as a MCP)",
   "main": "index.js",
   "scripts": {
-    "start": "node dist/src/index.js",
-    "dev": "ts-node src/index.ts",
-    "build": "tsc",
-    "test": "jest",
-    "release": "npm version patch && git push origin main --tags"
+    "dev": "bun run --watch src/index.ts",
+    "build": "bun build src/index.ts --compile --outfile=dist/server",
+    "test": "bun test",
+    "release": "bun version patch && git push origin main --tags"
   },
   "keywords": [],
   "author": "",
@@ -24,11 +23,6 @@
     "mqtt": "^5.14.1"
   },
   "devDependencies": {
-    "@types/jest": "^30.0.0",
-    "@types/node": "^24.10.1",
-    "jest": "^30.2.0",
-    "ts-jest": "^29.4.6",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "@types/bun": "latest"
   }
 }

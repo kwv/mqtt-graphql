@@ -31,20 +31,17 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.tag || github.ref }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          bun-version: latest
 
-      - name: Install deps (skip lifecycle scripts to avoid duplicate build)
-        run: npm ci --ignore-scripts
+      - name: Install deps
+        run: bun install
 
-      - name: Build
-        run: npm run build
+      - name: Build Check
+        run: bun run build
 
-      - name: Test
-        run: npm test
 
       # 2. Tag Extraction and Pre-Push Checks (Matches 'make check-version' and 'make check-tag')
       - name: Extract version from tag

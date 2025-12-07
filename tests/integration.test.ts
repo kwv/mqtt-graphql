@@ -1,4 +1,4 @@
-/// <reference types="jest" />
+
 import { store } from '../src/store';
 import { getSchema } from '../src/schema';
 import { invalidateSchema, schemaCachePromise } from '../src/mqtt';

@@ -1,4 +1,4 @@
-/// <reference types="jest" />
+
 import { Store } from '../src/store';
 
 describe('Store', () => {
