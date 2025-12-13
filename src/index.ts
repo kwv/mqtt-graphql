@@ -2,9 +2,10 @@ import { createServer } from 'http';
 import { createYoga } from 'graphql-yoga';
 import { getSchema } from './schema';
 import { schemaCachePromise } from './mqtt';
+import { version } from '../package.json';
 import './mqtt'; // Initialize MQTT connection
 
-console.log('Starting MQTT-GraphQL Service...');
+console.log(`Starting MQTT-GraphQL Service v${version}...`);
 
 const yoga = createYoga({
     // Dynamically generate schema on every request to reflect latest MQTT topics
