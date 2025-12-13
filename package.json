@@ -1,6 +1,6 @@
 {
   "name": "mqtt-graphql",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "this project is a MQTT client that subscribes to topics and then makes them queryable over graphql.   As the topics update, it regenerates a schema, and serves up information for non-mqtt aware services (such as a MCP)",
   "main": "index.js",
   "scripts": {
