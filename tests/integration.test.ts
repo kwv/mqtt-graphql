@@ -100,19 +100,19 @@ describe('Schema Integration', () => {
 
   test('should refresh schema async on invalidation', async () => {
     store.update('initial/value', '1');
-    
+
     // Trigger async schema invalidation
     invalidateSchema();
-    
+
     // Wait for the promise to resolve
     const newSchema = await schemaCachePromise;
     expect(newSchema).toBeDefined();
-    
+
     // Add a new topic after invalidation
     store.update('new/topic', '42');
     invalidateSchema();
     await schemaCachePromise;
-    
+
     // Query the newly added topic
     const schema = getSchema();
     const query = `
@@ -122,12 +122,41 @@ describe('Schema Integration', () => {
         }
       }
     `;
-    
+
     const result = await graphql({ schema, source: query });
     expect(result.errors).toBeUndefined();
     expect(result.data).toEqual({
       new: {
         topic: 42
+      }
+    });
+  });
+
+  test('should provide access to full subtree via _tree', async () => {
+    store.update('tree/a', '1');
+    store.update('tree/b', '2');
+    store.update('tree/nested/c', '3');
+
+    const schema = getSchema();
+    const query = `
+      query {
+        tree {
+          _tree
+        }
+      }
+    `;
+
+    const result = await graphql({ schema, source: query });
+    expect(result.errors).toBeUndefined();
+    expect(result.data).toEqual({
+      tree: {
+        _tree: {
+          a: 1,
+          b: 2,
+          nested: {
+            c: 3
+          }
+        }
       }
     });
   });
