@@ -74,6 +74,37 @@ export function getSchema(): GraphQLSchema {
         current._value = value;
     }
 
+    // Helper to recursively build a plain JSON object from a TreeNode
+    const buildTree = (node: TreeNode): any => {
+        const result: any = {};
+
+        // If this node has a direct value, include it (optional design choice: 
+        // strictly speaking _tree might just be children, but including _value 
+        // allows it to represent the "full state" at this node)
+        if (node._path && store.get(node._path) !== undefined) {
+            result._value = store.get(node._path);
+        }
+
+        const keys = Object.keys(node).sort();
+        for (const key of keys) {
+            if (key.startsWith('_')) continue;
+
+            const childNode = node[key] as TreeNode;
+            // Check if child is a leaf or has children
+            const grandChildren = Object.keys(childNode).filter(k => !k.startsWith('_'));
+
+            if (grandChildren.length > 0) {
+                result[key] = buildTree(childNode);
+            } else {
+                // It's a leaf, just get the value
+                if (childNode._path) {
+                    result[key] = store.get(childNode._path);
+                }
+            }
+        }
+        return result;
+    };
+
     // 2. Recursive Type Builder
     const createType = (name: string, obj: TreeNode): GraphQLObjectType => {
         const fields: any = {};
@@ -130,6 +161,12 @@ export function getSchema(): GraphQLSchema {
             };
         }
 
+        // Always add _tree to roll up everything from this level down
+        fields['_tree'] = {
+            type: JSONScalar,
+            resolve: () => buildTree(obj)
+        };
+
         return new GraphQLObjectType({
             name,
             fields: Object.keys(fields).length > 0 ? fields : { _empty: { type: GraphQLString } }
@@ -181,6 +218,13 @@ export function getSchema(): GraphQLSchema {
                         dynamicFields[sanitize(key)] = { type, resolve: () => store.get(node._path!) };
                     }
                 }
+
+                // Add _tree to root as well
+                dynamicFields['_tree'] = {
+                    type: JSONScalar,
+                    resolve: () => buildTree(root)
+                };
+
                 return dynamicFields;
             })()
         }

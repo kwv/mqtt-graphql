@@ -93,7 +93,11 @@ query {
 }
 ```
 
-If you need the **raw JSON object** (e.g., to see all fields without selecting them), use `_value`:
+## Special Fields
+
+### `_value`
+Access the raw value of a specific topic. This is useful when a topic holds a JSON object and you want to retrieve it as-is without traversing its sub-fields in GraphQL, or if a node acts as both a parent (folder) and a value (file).
+
 ```graphql
 query {
   ecowitt {
@@ -101,6 +105,25 @@ query {
       _value
     }
   }
+}
+```
+
+### `_tree`
+Recursively "roll up" all child topics from the current node into a single JSON object. This is perfect for snapshotting a whole branch of your custom MQTT hierarchy (e.g. getting all rooms in `home`).
+
+```graphql
+query {
+  home {
+    _tree
+  }
+}
+```
+
+Returns:
+```json
+{
+  "kitchen": { "temp": 22 },
+  "livingroom": { "light": "on", "humidity": 45 }
 }
 ```
 
