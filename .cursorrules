@@ -1,0 +1,9 @@
+# Project Rules
+
+## Documentation
+- **Changelog**: Always update `CHANGELOG.md` when making significant changes (features, breaking changes) or bumping the package version. Follow the "Keep a Changelog" format.
+- **Readme**: Ensure `README.md` is updated when adding new features or changing configuration options.
+
+## Testing
+- **Verification**: Always create or run existing tests to verify changes.
+- **Linting**: Check for lint errors after modifying code.

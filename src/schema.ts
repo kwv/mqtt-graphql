@@ -125,7 +125,74 @@ export function getSchema(): GraphQLSchema {
                 return null;
             };
 
-            if (hasChildren) {
+            // Dynamic List Handling (Arrays) initialization
+            const rawValue = node._path ? store.get(node._path) : null;
+            if (Array.isArray(rawValue) && rawValue.length > 0 && typeof rawValue[0] === 'object') {
+                // Feature: Generic Dynamic Filtering for Lists
+                // 1. Generate Type for Item based on first element (best effort)
+                const firstItem = rawValue[0];
+                const itemTypeName = `${name}_${sanitize(key)}_Item`;
+                const itemFields: any = {};
+
+                Object.keys(firstItem).forEach(k => {
+                    const v = firstItem[k];
+                    let type: any = GraphQLString;
+                    if (typeof v === 'number') type = GraphQLFloat;
+                    else if (typeof v === 'boolean') type = GraphQLBoolean;
+                    // For now, nested objects in list are just JSON
+                    else if (typeof v === 'object') type = JSONScalar;
+
+                    itemFields[sanitize(k)] = { type };
+                });
+                // Ensure _item backup exists
+                itemFields['_item'] = { type: JSONScalar, resolve: (r: any) => r };
+
+                const ItemType = new GraphQLObjectType({
+                    name: itemTypeName,
+                    fields: itemFields
+                });
+
+                fields[sanitize(key)] = {
+                    type: new GraphQLList(ItemType),
+                    args: {
+                        filterField: { type: GraphQLString },
+                        filterOp: { type: GraphQLString },
+                        filterValue: { type: GraphQLString }
+                    },
+                    resolve: (_: any, args: any) => {
+                        const list = store.get(node._path!) as any[];
+                        if (!list) return [];
+
+                        const { filterField, filterOp, filterValue } = args;
+
+                        if (filterField && filterOp && filterValue !== undefined) {
+                            return list.filter(item => {
+                                let actual = item[filterField];
+                                let target: any = filterValue;
+
+                                // Basic type inference for comparison
+                                if (typeof actual === 'number') {
+                                    const p = parseFloat(filterValue);
+                                    if (!isNaN(p)) target = p;
+                                }
+
+                                switch (filterOp) {
+                                    case 'EQ': return actual == target;
+                                    case 'NEQ': return actual != target;
+                                    case 'GT': return actual > target;
+                                    case 'LT': return actual < target;
+                                    case 'GTE': return actual >= target;
+                                    case 'LTE': return actual <= target;
+                                    case 'CONTAINS': return String(actual).includes(String(target));
+                                    default: return true;
+                                }
+                            });
+                        }
+                        return list;
+                    }
+                };
+                continue;
+            } else if (hasChildren) {
                 // It's a branch, so it MUST be an Object Type
                 const typeName = `${name}_${sanitize(key)}`;
                 fields[sanitize(key)] = {

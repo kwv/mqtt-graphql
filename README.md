@@ -127,6 +127,30 @@ Returns:
 }
 ```
 
+
+## Filtering Lists
+
+When a topic contains a **JSON Array** of objects (e.g. `[{"id": 1}, {"id": 2}]`), the service automatically exposes it as a List. You can use generic arguments to filter these lists directly in your query.
+
+**Arguments:**
+- `filterField`: The key name to check (String)
+- `filterOp`: The operator. Options: `EQ`, `NEQ`, `GT` (>), `LT` (<), `GTE` (>=), `LTE` (<=), `CONTAINS`.
+- `filterValue`: The value to compare against.
+
+**Example:**
+Get only notifications that expire before timestamp 2500:
+
+```graphql
+query {
+    state {
+        notifications(filterField: "expiresAt", filterOp: "LT", filterValue: "2500") {
+            messageId
+            expiresAt
+        }
+    }
+}
+```
+
 ## Configuration
 
 | Environment Variable | Default | Description |
