@@ -160,4 +160,50 @@ describe('Schema Integration', () => {
       }
     });
   });
+
+  test('should remove key when empty buffer received', async () => {
+    store.update('del/test/keep', '1');
+    store.update('del/test/remove', '2');
+
+    let schema = getSchema();
+    let query = `
+        query {
+            del {
+                test {
+                    _tree
+                }
+            }
+        }
+    `;
+
+    let result = await graphql({ schema, source: query });
+    expect(result.data).toEqual({
+      del: {
+        test: {
+          _tree: {
+            keep: 1,
+            remove: 2
+          }
+        }
+      }
+    });
+
+    // Simulate deletion (empty buffer)
+    store.update('del/test/remove', Buffer.alloc(0));
+
+    // Refresh schema reference if needed (though store is singleton)
+    schema = getSchema();
+
+    result = await graphql({ schema, source: query });
+
+    expect(result.data).toEqual({
+      del: {
+        test: {
+          _tree: {
+            keep: 1
+          }
+        }
+      }
+    });
+  });
 });

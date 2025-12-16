@@ -4,7 +4,18 @@ export class Store {
     private data = new Map<string, TopicValue>();
 
     update(topic: string, message: Buffer | string) {
+        if (message === null || (Buffer.isBuffer(message) && message.length === 0) || message === '') {
+            this.delete(topic);
+            return;
+        }
+
         let value: TopicValue = message.toString();
+        // Check for empty string after conversion as well, just in case
+        if (value === '') {
+            this.delete(topic);
+            return;
+        }
+
         try {
             const parsed = JSON.parse(value as string);
             // Ensure we don't treat simple strings as JSON if they just happen to parse (e.g. "123")
@@ -25,6 +36,10 @@ export class Store {
         // Recursively flatten and store
         this.storeRecursive(topic, value);
         // console.log(`Stored ${topic}:`, value);
+    }
+
+    delete(topic: string) {
+        this.data.delete(topic);
     }
 
     private storeRecursive(path: string, value: TopicValue) {
