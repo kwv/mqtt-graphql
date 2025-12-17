@@ -1,6 +1,13 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [0.4.0] - 2025-12-16
+
+### Added
+- **Map-like Object Filtering**: Added support for filtering collections of sub-topics.
+  - Automatically detects if a map of objects behaves like a list (numeric keys + homogeneous structure).
+  - Exposes them as a List with filter arguments.
+  - Preserves Object access for heterogeneous maps (e.g. Z-Wave nodes).
 
 ## [0.3.0] - 2025-12-16
 

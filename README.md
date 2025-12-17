@@ -149,7 +149,33 @@ query {
         }
     }
 }
+    }
+}
 ```
+
+### Map-like Object Filtering
+Often, data is stored as a map of topics (e.g., `notifications/1`, `notifications/2`) rather than a single JSON array.
+If a topic looks like a "Collection" (keys are numeric and items share a similar structure), the schema automatically exposes it as a List, enabling the same filtering capabilities.
+
+**Example:**
+*   Topic: `state/notifications/145` -> `{ "expiresAt": 100 }`
+*   Topic: `state/notifications/146` -> `{ "expiresAt": 200 }`
+
+You can filter the `notifications` node directly:
+
+```graphql
+query {
+  state {
+    # Treated as a List because keys are numeric & homogeneous
+    notifications(filterField: "expiresAt", filterOp: "GT", filterValue: "150") {
+      id 
+      expiresAt
+    }
+  }
+}
+```
+*Note: If the items are heterogeneous (different shapes, like Z-Wave command classes), they remain accessible as an Object so you can access specific ID fields (e.g. `_113`).*
+
 
 ## Configuration
 

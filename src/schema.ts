@@ -193,12 +193,193 @@ export function getSchema(): GraphQLSchema {
                 };
                 continue;
             } else if (hasChildren) {
-                // It's a branch, so it MUST be an Object Type
-                const typeName = `${name}_${sanitize(key)}`;
-                fields[sanitize(key)] = {
-                    type: createType(typeName, node),
-                    resolve: () => node // Pass the node context down
-                };
+                // Feature: Map-like Object Filtering
+                // Check if this node looks like a collection of objects (all children are objects)
+                // We use a heuristic: if it has > 0 children and (at least one) child is an object,
+                // we treat it as a potential collection.
+                // For simplicity, we'll try to generate a common item type based on the first child that is an object.
+
+                const childKeys = Object.keys(node).filter(k => !k.startsWith('_'));
+                const firstChildKey = childKeys.find(k => {
+                    const c = node[k];
+                    // Verify child is a TreeNode (object) and has its own structure (not just a path with scalar value)
+                    // In our valid Tree, everything is an object, but we want to check if it has "fields".
+                    // Actually, even a leaf node is ` { _path: ... }`.
+                    // We want to check if the child represents an "Entity" (has more than just _path).
+                    // Or simply if the user wants to filter ANY list of children.
+                    return typeof c === 'object';
+                });
+
+                let isCollection = false;
+                let ItemType: GraphQLObjectType | null = null;
+
+                if (firstChildKey) {
+                    const firstChildNode = node[firstChildKey] as TreeNode;
+                    // To generate an ItemType, we look at the keys of this child.
+                    // Only treat as collection if the child actually has properties (other than _path).
+                    // This avoids treating `state/temp: 20` (which is {temp: {_path...}}) as a collection of "temp", 
+                    // although technically it is a collection of 1 item??
+                    // Let's stick to the user's case: `notifications/123/ { id, expiresAt ... }`
+                    // The child `123` has keys `id`, `expiresAt`.
+                    const firstChildProps = Object.keys(firstChildNode).filter(k => !k.startsWith('_'));
+
+                    // Heuristic Refinement:
+                    // Only treat as a "Collection" (List) if the keys look like IDs (start with specific chars)
+                    // or if we have strong evidence of homogeneity.
+                    // The "Cannot query field" regression happened because `device/lock/state` 
+                    // (where `state` is a property) was treated as a collection of 1 item with key `state`.
+                    //
+                    // Current User Constraint: Keys start with numbers (e.g. "145...").
+                    // Fix: Check if keys are numeric.
+                    const areKeysNumeric = childKeys.every(k => /^[0-9]/.test(k));
+
+                    // Refinement 2: Homogeneity & Key Length Check
+                    // Z-Wave issue: Keys '113' and '132' are numeric but have different shapes (different Command Classes).
+                    // Notifications: Keys are long IDs and have same shape.
+
+                    let looksLikeList = false;
+
+                    if (areKeysNumeric && childKeys.length > 0) {
+                        if (childKeys.length > 1) {
+                            // Check Homogeneity (Duck Typing)
+                            const first = node[childKeys[0]] as TreeNode;
+                            const second = node[childKeys[1]] as TreeNode;
+                            const keys1 = Object.keys(first).filter(k => !k.startsWith('_'));
+                            const keys2 = Object.keys(second).filter(k => !k.startsWith('_'));
+
+                            // Intersection
+                            const intersection = keys1.filter(k => keys2.includes(k));
+                            const union = new Set([...keys1, ...keys2]);
+
+                            // If they share at least 50% of keys, they are likely the same type
+                            // Or if they share ALL keys (ideal).
+                            // Notifications likely share 'expiresAt', 'id', 'channel', 'messageId'.
+                            // Z-Wave '113' (alarm) vs '132' (meter) likely share 0 keys.
+
+                            if (union.size > 0) {
+                                const overlapRatio = intersection.length / union.size;
+                                if (overlapRatio >= 0.3) { // 30% overlap is generous but safe enough for "similar" objects
+                                    looksLikeList = true;
+                                }
+                            } else {
+                                // Both empty? Treat as list of empties? Or object?
+                                // If empty, it doesn't matter much.
+                                looksLikeList = true;
+                            }
+                        } else {
+                            // Only 1 child. Hard to judge homogeneity.
+                            // Use Key Length Heuristic.
+                            // Z-Wave IDs are short (3-4 digits).
+                            // Notification IDs/Timestamps are long (> 10).
+                            // Let's guess: If key length > 6, it's an ID -> List.
+                            // If key length <= 6, it could be a specialized mapping key -> Object.
+                            // Example: "1450334..." -> List.
+                            // Example: "113" -> Object.
+                            if (childKeys[0].length > 6) {
+                                looksLikeList = true;
+                            }
+                        }
+                    }
+
+                    if (firstChildProps.length > 0 && looksLikeList) {
+                        isCollection = true;
+
+                        // Generate Item Type
+                        const itemTypeName = `${name}_${sanitize(key)}_Item`;
+
+                        const itemFields: any = {};
+
+                        for (const prop of firstChildProps) {
+                            // We need to determine the type of the property.
+                            // We can use the existing createsType logic recursively if needed?
+                            // Or just simple scalar logic for now as this is "Object Filtering" (usually 1 level deep).
+                            // Let's try to support nested objects in items too by checking the child node.
+                            const propNode = firstChildNode[prop] as TreeNode;
+
+                            // Determine type
+                            const propVal = propNode._path ? store.get(propNode._path) : undefined;
+                            let propType: any = GraphQLString;
+                            if (typeof propVal === 'number') propType = GraphQLFloat;
+                            else if (typeof propVal === 'boolean') propType = GraphQLBoolean;
+
+                            // If property is itself an object, simple JSON for now to avoid infinite complexity
+                            // or simple generic object.
+                            itemFields[sanitize(prop)] = { type: propType };
+
+                            // Also support resolving it!
+                            // The item in the list will be the `firstChildNode` (the TreeNode).
+                            itemFields[sanitize(prop)].resolve = (itemNode: TreeNode) => {
+                                // itemNode is the node for the item (e.g. `notifications/1`).
+                                // We want `itemNode[prop]`.
+                                const child = itemNode[prop] as TreeNode;
+                                return child && child._path ? store.get(child._path) : null;
+                            };
+                        }
+
+                        ItemType = new GraphQLObjectType({
+                            name: itemTypeName,
+                            fields: itemFields
+                        });
+                    }
+                }
+
+                if (isCollection && ItemType) {
+                    // It is a collection! Expose as a List with Filters.
+                    fields[sanitize(key)] = {
+                        type: new GraphQLList(ItemType),
+                        args: {
+                            filterField: { type: GraphQLString },
+                            filterOp: { type: GraphQLString },
+                            filterValue: { type: GraphQLString }
+                        },
+                        resolve: (_: any, args: any) => {
+                            // Parent node is `node` (the collection root).
+                            // Children are `node[childKey]`.
+                            const childKeys = Object.keys(node).filter(k => !k.startsWith('_'));
+                            let items = childKeys.map(k => node[k] as TreeNode);
+
+                            const { filterField, filterOp, filterValue } = args;
+
+                            if (filterField && filterOp && filterValue !== undefined) {
+                                items = items.filter(itemNode => {
+                                    // Get value of the filter field from the itemNode
+                                    // itemNode is e.g. "notifications/1"
+                                    // filterField is "expiresAt"
+                                    // We need to look up "notifications/1/expiresAt"
+                                    const fieldNode = itemNode[filterField] as TreeNode;
+                                    if (!fieldNode || !fieldNode._path) return false;
+
+                                    let actual = store.get(fieldNode._path);
+                                    let target: any = filterValue;
+
+                                    if (typeof actual === 'number') {
+                                        const p = parseFloat(filterValue);
+                                        if (!isNaN(p)) target = p;
+                                    }
+
+                                    switch (filterOp) {
+                                        case 'EQ': return actual == target;
+                                        case 'NEQ': return actual != target;
+                                        case 'GT': return actual > target;
+                                        case 'LT': return actual < target;
+                                        case 'GTE': return actual >= target;
+                                        case 'LTE': return actual <= target;
+                                        case 'CONTAINS': return String(actual).includes(String(target));
+                                        default: return true;
+                                    }
+                                });
+                            }
+                            return items;
+                        }
+                    };
+                } else {
+                    // Fallback to standard Object behavior (recurse)
+                    const typeName = `${name}_${sanitize(key)}`;
+                    fields[sanitize(key)] = {
+                        type: createType(typeName, node),
+                        resolve: () => node
+                    };
+                }
             } else {
                 // It's a leaf. Determine type from current value (best effort)
                 const val = store.get(node._path!);
