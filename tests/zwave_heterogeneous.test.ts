@@ -13,10 +13,11 @@ describe('Z-Wave Heterogeneous Keys', () => {
     });
 
     test('should treat heterogeneous numeric keys as an Object, not a List', async () => {
-        // Z-Wave Scenario: Keys are Command Class IDs (numbers), but they are NOT a list of similar items.
-        // They are distinct functional blocks.
-        store.update('zwave/node/113', JSON.stringify({ alarmType: 1, level: 2 }));
-        store.update('zwave/node/132', JSON.stringify({ meterValue: 50.5, unit: "W" }));
+        // Z-Wave Scenario: Keys are Command Class IDs (numbers).
+        // Regression Update: Both might have a sub-key "0" (Endpoint).
+        // This shared key previously tricked the "Homogeneity" check.
+        store.update('zwave/node/113/0/alarmType', "1");
+        store.update('zwave/node/132/0/meterValue', "50.5");
 
         const schema = getSchema();
 
@@ -29,10 +30,14 @@ describe('Z-Wave Heterogeneous Keys', () => {
                 zwave {
                     node {
                         _113 {
-                            alarmType
+                            _0 {
+                                alarmType
+                            }
                         }
                         _132 {
-                            meterValue
+                            _0 {
+                                meterValue
+                            }
                         }
                     }
                 }
@@ -44,15 +49,16 @@ describe('Z-Wave Heterogeneous Keys', () => {
         // This fails if 'node' is a List type
         expect(result.errors).toBeUndefined();
         // @ts-ignore
-        expect(result.data.zwave.node._113.alarmType).toEqual(1);
+        expect(result.data.zwave.node._113._0.alarmType).toEqual(1);
         // @ts-ignore
-        expect(result.data.zwave.node._132.meterValue).toEqual(50.5);
+        expect(result.data.zwave.node._132._0.meterValue).toEqual(50.5);
     });
 
     test('should still treat homogeneous keys as a List (Notifications)', async () => {
         // Regression Check: Ensure Notifications still work as a List
-        store.update('state/notifications/145', JSON.stringify({ id: 145, expiresAt: 100 }));
-        store.update('state/notifications/146', JSON.stringify({ id: 146, expiresAt: 200 }));
+        // UPDATE: Keys must be long (> 6 chars) to trigger list heuristic.
+        store.update('state/notifications/14500001', JSON.stringify({ id: 14500001, expiresAt: 100 }));
+        store.update('state/notifications/14600001', JSON.stringify({ id: 14600001, expiresAt: 200 }));
 
         const schema = getSchema();
         const query = `

@@ -106,9 +106,10 @@ describe('Generic Schema Filtering', () => {
 
     test('should filter map of objects as if it were a list', async () => {
         // Setup: separate topics forming a "list" of items
-        store.update('state/notifications/1', JSON.stringify({ id: '1', expiresAt: 1000 }));
-        store.update('state/notifications/2', JSON.stringify({ id: '2', expiresAt: 3000 }));
-        store.update('state/notifications/3', JSON.stringify({ id: '3', expiresAt: 2000 }));
+        const id1 = '14500001';
+        const id2 = '14600001';
+        store.update(`state/notifications/${id1}`, JSON.stringify({ id: id1, expiresAt: 1000 }));
+        store.update(`state/notifications/${id2}`, JSON.stringify({ id: id2, expiresAt: 3000 }));
 
         const schema = getSchema();
         const query = `
@@ -127,9 +128,9 @@ describe('Generic Schema Filtering', () => {
         // @ts-ignore
         const data = result.data.state.notifications;
 
-        // Should return items 2 and 3 (values 3000 and 2000)
-        expect(data).toHaveLength(2);
+        // Should return items matching > 1500 (value 3000)
+        expect(data).toHaveLength(1);
         const ids = data.map((n: any) => n.id).sort();
-        expect(ids).toEqual(['2', '3']);
+        expect(ids).toEqual([id2]);
     });
 });

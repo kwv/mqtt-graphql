@@ -258,23 +258,26 @@ export function getSchema(): GraphQLSchema {
 
                             if (union.size > 0) {
                                 const overlapRatio = intersection.length / union.size;
-                                if (overlapRatio >= 0.3) { // 30% overlap is generous but safe enough for "similar" objects
+                                if (overlapRatio >= 0.3) {
                                     looksLikeList = true;
                                 }
                             } else {
-                                // Both empty? Treat as list of empties? Or object?
-                                // If empty, it doesn't matter much.
                                 looksLikeList = true;
                             }
+
+                            // OVERRIDE: Homogeneity check is unsafe for small structural objects (like Z-Wave endpoints).
+                            // Example: 113/0 and 132/0 share key "0" -> 100% overlap -> detected as List -> BROKEN.
+                            // Fix: Enforce Key Length Heuristic.
+                            // Real "Lists" of data usually use UUIDs, Timestamps, or Hash keys (Long).
+                            // Z-Wave/Zigbee structure uses short specific IDs (Short).
+                            // Threshold: 6 characters (e.g. "123456" is ambiguous, "145033..." is definitely an ID).
+
+                            const firstKey = childKeys[0];
+                            if (firstKey.length <= 6) {
+                                looksLikeList = false;
+                            }
                         } else {
-                            // Only 1 child. Hard to judge homogeneity.
-                            // Use Key Length Heuristic.
-                            // Z-Wave IDs are short (3-4 digits).
-                            // Notification IDs/Timestamps are long (> 10).
-                            // Let's guess: If key length > 6, it's an ID -> List.
-                            // If key length <= 6, it could be a specialized mapping key -> Object.
-                            // Example: "1450334..." -> List.
-                            // Example: "113" -> Object.
+                            // Only 1 child. 
                             if (childKeys[0].length > 6) {
                                 looksLikeList = true;
                             }
