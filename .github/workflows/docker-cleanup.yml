@@ -8,7 +8,7 @@ on:
       dry_run:
         description: 'Dry Run (true/false)'
         required: true
-        default: 'true'
+        default: true
         type: boolean
 
 permissions:
