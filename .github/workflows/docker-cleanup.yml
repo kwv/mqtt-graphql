@@ -43,115 +43,68 @@ jobs:
         run: |
           set -e
           
-          echo " Starting cleanup for $NAMESPACE/$REPO"
-          echo " DRY_RUN: $DRY_RUN"
-          echo " KEEP_RECENT: $KEEP_RECENT"
+          echo "🚀 Starting synchronized cleanup for $NAMESPACE/$REPO"
+          echo "🔹 KEEP_RECENT: $KEEP_RECENT"
+          echo "🔹 DRY_RUN: $DRY_RUN"
           
           # 1. Authenticate with Docker Hub
-          echo " Authenticating with Docker Hub..."
           TOKEN=$(curl -s -H "Content-Type: application/json" -X POST -d '{"username": "'${DOCKER_USERNAME}'", "password": "'${DOCKER_PASSWORD}'"}' https://hub.docker.com/v2/users/login/ | jq -r .token)
-          
-          if [ "$TOKEN" == "null" ] || [ -z "$TOKEN" ]; then
-            echo "::error::Failed to authenticate with Docker Hub"
-            exit 1
-          fi
+          if [ "$TOKEN" == "null" ] || [ -z "$TOKEN" ]; then echo "::error::Failed to authenticate"; exit 1; fi
 
-          # 2. Fetch all tags
-          echo " Fetching tags..."
+          # 2. Get Version Info from Git (Primary Source for releases)
+          echo "📊 Analyzing Git tags..."
+          # Fetch all tags and filter for semantic versioning (vX.Y.Z)
+          # Note: uses git tag sort to handle version hierarchy correctly
+          GIT_VERSION_TAGS=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
+          VERSION_TAGS_TO_KEEP=$(echo "$GIT_VERSION_TAGS" | head -n "$KEEP_RECENT")
+          
+          # 3. Get Version Info from Docker Hub
+          echo "📊 Analyzing Docker Hub tags..."
           TAGS_JSON=$(curl -s -H "Authorization: JWT $TOKEN" "https://hub.docker.com/v2/repositories/$NAMESPACE/$REPO/tags/?page_size=100")
+          DOCKER_TAGS=$(echo "$TAGS_JSON" | jq -r '.results[].name')
           
-          # 3. Identify special tags and their digests
-          LATEST_DIGEST=$(echo "$TAGS_JSON" | jq -r '.results[] | select(.name == "latest") | .images[0].digest')
-          echo " 'latest' digest: $LATEST_DIGEST"
-          
-          # 4. Filter and Process Tags
-          # Get list of version tags sorted by date (newest first)
-          echo " Analyzing tags..."
-          ALL_TAGS=$(echo "$TAGS_JSON" | jq -r '.results[] | select(.name | test("^(latest|stable|dev)$") | not) | "\(.name)|\(.last_updated)|\(.images[0].digest)"' | sort -t "|" -k2 -r)
-          
-          # Pass 1: Plan and Identify Kept Digests
-          TAG_PLAN=""
-          KEPT_DIGESTS="$LATEST_DIGEST" # Always keep latest digest
-          COUNT=0
-          
-          IFS=$'\n'
-          for line in $ALL_TAGS; do
-            TAG_NAME=$(echo "$line" | cut -d "|" -f 1)
-            TAG_DATE=$(echo "$line" | cut -d "|" -f 2)
-            TAG_DIGEST=$(echo "$line" | cut -d "|" -f 3)
-            
-            ACTION="DELETE"
-            REASON=""
-            
-            # Logic: Keep if same as latest OR if within recent count
-            if [ "$TAG_DIGEST" == "$LATEST_DIGEST" ]; then
-                ACTION="KEEP"
-                REASON="(Matches latest)"
-            elif [ "$COUNT" -lt "$KEEP_RECENT" ]; then
-                ACTION="KEEP"
-                REASON="(Recent #$((COUNT+1)))"
-                COUNT=$((COUNT+1))
-            else
-                REASON="(Old)"
-            fi
-            
-            if [ "$ACTION" == "KEEP" ]; then
-                # Add to KEPT_DIGESTS if not present
-                if [[ "$KEPT_DIGESTS" != *"$TAG_DIGEST"* ]]; then
-                    KEPT_DIGESTS="${KEPT_DIGESTS} ${TAG_DIGEST}"
-                fi
-            fi
-            
-            # Store plan: NAME|DATE|DIGEST|ACTION|REASON
-            TAG_PLAN="${TAG_PLAN}${TAG_NAME}|${TAG_DATE}|${TAG_DIGEST}|${ACTION}|${REASON}\n"
-          done
-          
-          echo "----------------------------------------------------------------------------------------------------------"
-          printf "%-20s %-25s %-10s %-20s %-20s\n" "TAG" "UPDATED" "ACTION" "REASON" "IMAGE STATUS"
-          echo "----------------------------------------------------------------------------------------------------------"
+          # 4. Consolidate list of all unique version tags (v*) from both systems
+          ALL_VERSION_TAGS=$(printf "%s\n%s" "$(echo "$GIT_VERSION_TAGS")" "$(echo "$DOCKER_TAGS")" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -u || true)
 
-          # Pass 2: Execute
-          printf "$TAG_PLAN" | while IFS= read -r line; do
-            if [ -z "$line" ]; then continue; fi
+          echo "--------------------------------------------------------------------------------"
+          printf "%-25s %-10s %-20s\n" "TAG" "STATUS" "PLAN"
+          echo "--------------------------------------------------------------------------------"
+
+          for tag in $ALL_VERSION_TAGS; do
+            ACTION="DELETE"
+            REASON="Old version"
             
-            TAG_NAME=$(echo "$line" | cut -d "|" -f 1)
-            TAG_DATE=$(echo "$line" | cut -d "|" -f 2)
-            TAG_DIGEST=$(echo "$line" | cut -d "|" -f 3)
-            ACTION=$(echo "$line" | cut -d "|" -f 4)
-            REASON=$(echo "$line" | cut -d "|" -f 5)
-            
-            IMAGE_STATUS=""
-            
-            if [ "$ACTION" == "DELETE" ]; then
-                if [[ "$KEPT_DIGESTS" == *"$TAG_DIGEST"* ]]; then
-                    IMAGE_STATUS="Preserved (Shared)"
-                else
-                    IMAGE_STATUS="Orphaned (Will GC)"
-                fi
-            else
-                IMAGE_STATUS="Kept"
+            # Check if we should keep it
+            if echo "$VERSION_TAGS_TO_KEEP" | grep -qX "$tag"; then
+              ACTION="KEEP"
+              REASON="Recent release"
             fi
             
-            printf "%-20s %-25s %-10s %-20s %-20s\n" "$TAG_NAME" "$TAG_DATE" "$ACTION" "$REASON" "$IMAGE_STATUS"
-            
+            # Check if it matches 'latest' or other protected tags (sanity check, though v* usually doesn't)
+            if [[ "$tag" =~ $PROTECTED_REGEX ]]; then
+              ACTION="KEEP"
+              REASON="Protected"
+            fi
+
+            printf "%-25s %-10s %-20s\n" "$tag" "$ACTION" "$REASON"
+
             if [ "$ACTION" == "DELETE" ]; then
-                if [ "$DRY_RUN" == "true" ]; then
-                    echo "   [DRY RUN] Would delete Docker tag: $TAG_NAME"
-                    echo "   [DRY RUN] Would delete Git tag: $TAG_NAME"
-                    if [ "$IMAGE_STATUS" == "Orphaned (Will GC)" ]; then
-                        echo "   [DRY RUN] Image manifest $TAG_DIGEST would become untagged."
-                    fi
-                else
-                    echo "   Deleting Docker tag: $TAG_NAME"
-                    RESPONSE=$(curl -s -X DELETE -H "Authorization: JWT $TOKEN" "https://hub.docker.com/v2/repositories/$NAMESPACE/$REPO/tags/$TAG_NAME/")
-                    
-                    if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
-                        echo "   Deleting Git tag: $TAG_NAME"
-                        git tag -d "$TAG_NAME"
-                        git push origin --delete "$TAG_NAME" || echo "   Note: Failed to push delete for $TAG_NAME (might be already gone)"
-                    else
-                        echo "   Git tag $TAG_NAME not found locally."
-                    fi
+              if [ "$DRY_RUN" == "true" ]; then
+                echo "   [DRY RUN] Would delete $tag from Docker Hub and Git"
+              else
+                # Delete from Docker Hub
+                if echo "$DOCKER_TAGS" | grep -qX "$tag"; then
+                  echo "   🗑️ Deleting Docker tag: $tag"
+                  curl -s -X DELETE -H "Authorization: JWT $TOKEN" "https://hub.docker.com/v2/repositories/$NAMESPACE/$REPO/tags/$tag/" > /dev/null
                 fi
+                # Delete from Git
+                if git rev-parse "$tag" >/dev/null 2>&1; then
+                  echo "   🗑️ Deleting Git tag: $tag"
+                  git tag -d "$tag" > /dev/null
+                  git push origin --delete "$tag" > /dev/null || echo "   ⚠️ Git push delete failed (tag might be gone)"
+                fi
+              fi
             fi
           done
+          echo "--------------------------------------------------------------------------------"
+          echo "✅ Cleanup plan complete."
