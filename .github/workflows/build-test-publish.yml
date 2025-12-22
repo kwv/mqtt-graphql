@@ -49,13 +49,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Extract version from tag
-        id: extract
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "VERSION is $VERSION"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKERHUB_USER }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
 
       - name: Log in to Docker Hub
         if: startsWith(github.ref, 'refs/tags/v')
@@ -70,5 +71,6 @@ jobs:
           context: .
           push: ${{ startsWith(github.ref, 'refs/tags/v') }}
           build-args: |
-            VERSION=${{ steps.extract.outputs.version }}
-          tags: ${{ startsWith(github.ref, 'refs/tags/v') && format('{0}/{1}:{2}\n{0}/{1}:latest', env.DOCKERHUB_USER, env.IMAGE_NAME, steps.extract.outputs.version) || '' }}
+            VERSION=${{ steps.meta.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
