@@ -1,4 +1,4 @@
-name: Build, Test, and Push Docker Image
+name: Build, Test, and Publish
 
 on:
   push:
@@ -6,12 +6,14 @@ on:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
   pull_request:
+    branches: [ main ]
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
-  build-and-push:
+  release:
     runs-on: ubuntu-latest
 
     env:
