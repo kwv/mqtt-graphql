@@ -8,7 +8,7 @@ on:
       dry_run:
         description: 'Dry Run (true/false)'
         required: true
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -23,7 +23,7 @@ jobs:
       KEEP_RECENT: '2'
       OLDER_THAN_DAYS: '15'
       PROTECTED_REGEX: '^(latest|stable|dev)$'
-      DRY_RUN: ${{ inputs.dry_run || 'true' }}
+      DRY_RUN: ${{ inputs.dry_run || 'false' }}
 
     steps:
       - name: Checkout repository
