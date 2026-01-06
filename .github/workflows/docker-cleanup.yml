@@ -36,10 +36,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq curl
 
-      - name: Cleanup Docker and Git Tags
+      - name: Cleanup Docker, Git, and GitHub Releases
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKERHUB_USER }}
           DOCKER_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
           
@@ -90,12 +91,18 @@ jobs:
 
             if [ "$ACTION" == "DELETE" ]; then
               if [ "$DRY_RUN" == "true" ]; then
-                echo "   [DRY RUN] Would delete $tag from Docker Hub and Git"
+                echo "   [DRY RUN] Would delete $tag from Docker Hub, GitHub Releases, and Git"
               else
                 # Delete from Docker Hub
                 if echo "$DOCKER_TAGS" | grep -qx "$tag"; then
                   echo "   🗑️ Deleting Docker tag: $tag"
                   curl -s -X DELETE -H "Authorization: JWT $TOKEN" "https://hub.docker.com/v2/repositories/$NAMESPACE/$REPO/tags/$tag/" > /dev/null
+                fi
+                # Delete from GitHub Releases
+                RELEASE_ID=$(curl -s -H "Authorization: token $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$tag" | jq -r .id)
+                if [ "$RELEASE_ID" != "null" ] && [ -n "$RELEASE_ID" ]; then
+                  echo "   🗑️ Deleting GitHub Release: $tag (ID: $RELEASE_ID)"
+                  curl -s -X DELETE -H "Authorization: token $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > /dev/null
                 fi
                 # Delete from Git
                 if git rev-parse "$tag" >/dev/null 2>&1; then
