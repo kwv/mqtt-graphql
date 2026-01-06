@@ -75,7 +75,7 @@ jobs:
             REASON="Old version"
             
             # Check if we should keep it
-            if echo "$VERSION_TAGS_TO_KEEP" | grep -qX "$tag"; then
+            if echo "$VERSION_TAGS_TO_KEEP" | grep -qx "$tag"; then
               ACTION="KEEP"
               REASON="Recent release"
             fi
@@ -93,7 +93,7 @@ jobs:
                 echo "   [DRY RUN] Would delete $tag from Docker Hub and Git"
               else
                 # Delete from Docker Hub
-                if echo "$DOCKER_TAGS" | grep -qX "$tag"; then
+                if echo "$DOCKER_TAGS" | grep -qx "$tag"; then
                   echo "   🗑️ Deleting Docker tag: $tag"
                   curl -s -X DELETE -H "Authorization: JWT $TOKEN" "https://hub.docker.com/v2/repositories/$NAMESPACE/$REPO/tags/$tag/" > /dev/null
                 fi
