@@ -37,10 +37,20 @@ const TopicResultType = new GraphQLObjectType({
 });
 
 function sanitize(str: string) {
-    // Ensure valid GraphQL name
-    let val = str.replace(/[^a-zA-Z0-9_]/g, '_');
-    if (/^[0-9]/.test(val)) val = '_' + val;
-    return val || '_empty';
+  let val = str;
+
+  // 1. Replace any field name starting with "__" with "_"
+  val = val.replace(/^__/, '_');
+
+  // 2. Replace any invalid characters (non-alphanumeric or non-underscore) with "_"
+  val = val.replace(/[^a-zA-Z0-9_]/g, '_');
+
+  // 3. Ensure field name doesn't start with a number
+  if (/^[0-9]/.test(val)) {
+    val = '_' + val;
+  }
+
+  return val || '_empty';
 }
 
 // Tree node interface
