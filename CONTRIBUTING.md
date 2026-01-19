@@ -39,25 +39,43 @@ bun run build
 
 ## 🚀 Releasing a New Version
 
-The project uses **Git tags** to trigger automated Docker image builds and releases.
+The project uses a **PR-based release workflow** to ensure all changes are validated before publishing.
 
 ### Steps to Publish a New Version
 
-1.  Ensure your changes are committed to `main`.
-2.  Tag the commit with a semantic version (e.g., `v1.2.3`):
+1.  Ensure your local `main` branch is up to date:
     ``` sh
-    git tag v1.2.3
-    git push origin v1.2.3
+    git checkout main
+    git pull
     ```
+
+2.  Run the bump command to create a release PR:
+    ``` sh
+    make bump
+    ```
+
+    This will:
+    - Create a timestamped release branch
+    - Bump the patch version in `package.json`
+    - Create a version commit and tag
+    - Push to GitHub and create a PR
+
+3.  Review the PR, wait for CI validation to pass, then merge.
+
+4.  Once merged, the tag will be on `main` and trigger the Docker release automatically.
+
+**Note:** The `main` branch is protected and requires PRs. All changes, including releases, must go through pull requests.
 
 ### 🤖 CI/CD Automation
 
-The GitHub Actions workflow triggers on every push and pull request:
+The GitHub Actions workflows handle validation and releases:
 
-- **Push to main / PRs**: Runs `bun test` and build checks.
-- **Tag Push**: Decodes the version from the tag, runs tests, and then builds and publishes the multi-arch Docker image:
-    - `kwv4/mqtt-graphql:v1.2.3`
+- **Pull Requests**: The `validate` job runs lint, tests, and build checks.
+- **Tag Push**: When a version tag reaches `main`, the `release` job runs full validation and builds/publishes the multi-arch Docker image:
+    - `kwv4/mqtt-graphql:1.2.3` (semantic version)
+    - `kwv4/mqtt-graphql:1.2` (major.minor)
     - `kwv4/mqtt-graphql:latest`
+- **Dependabot**: When dependency PRs merge, `auto-release.yml` automatically creates a release PR that auto-merges after CI passes.
 
 ### 🧹 Tag Cleanup
 The repository contains a weekly automated cleanup job (`docker-cleanup.yml`) that:
@@ -84,6 +102,10 @@ docker run --rm mqtt-graphql:test
 2. Commit your changes.
 3. Open a pull request (PR) targeting the `main` branch.
 4. Ensure your PR includes a clear description.
+5. Wait for CI validation to pass (the `validate` job will run tests and build checks).
+6. Once approved and CI passes, merge your PR.
+
+**Note:** Direct pushes to `main` are blocked by branch protection rules. All changes must go through PRs.
 
 ------------------------------------------------------------------------
 

@@ -11,7 +11,11 @@ dev:
 test:
 	bun test
 
-# Bump version, commit, tag, and push
+# Bump version, commit, tag, create PR
 bump:
+	@echo "Creating release branch and bumping version..."
+	git checkout -b release-bump-$(shell date +%Y%m%d-%H%M%S)
 	npm version patch
-	git push --follow-tags
+	git push origin HEAD --follow-tags
+	@NEW_VERSION=$$(node -p "require('./package.json').version") && \
+		gh pr create --fill --base main --title "chore: release v$$NEW_VERSION"

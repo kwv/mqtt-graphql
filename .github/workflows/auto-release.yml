@@ -36,7 +36,15 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump version and push tag
+      - name: Bump version and create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-            # Use the release script to bump version, create commit, and push tags
-            bun run release
+            # Create release branch, bump version, and create PR
+            git checkout -b release-bump-$(date +%Y%m%d-%H%M%S)
+            npm version patch
+            NEW_VERSION=$(node -p "require('./package.json').version")
+            git push origin HEAD --follow-tags
+            gh pr create --fill --base main --title "chore: release v${NEW_VERSION} (auto)"
+            # Auto-merge since dependencies already passed tests
+            gh pr merge --auto --squash
