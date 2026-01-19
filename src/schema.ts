@@ -37,20 +37,21 @@ const TopicResultType = new GraphQLObjectType({
 });
 
 function sanitize(str: string) {
-  let val = str;
+    let val = str;
 
-  // 1. Replace any field name starting with "__" with "_"
-  val = val.replace(/^__/, '_');
+    // 1. Replace any field name starting with "__" with "_"
+    // Collapse multiple leading underscores to a single one for GraphQL compatibility
+    val = val.replace(/^__+/, '_');
 
-  // 2. Replace any invalid characters (non-alphanumeric or non-underscore) with "_"
-  val = val.replace(/[^a-zA-Z0-9_]/g, '_');
+    // 2. Replace any invalid characters (non-alphanumeric or non-underscore) with "_"
+    val = val.replace(/[^a-zA-Z0-9_]/g, '_');
 
-  // 3. Ensure field name doesn't start with a number
-  if (/^[0-9]/.test(val)) {
-    val = '_' + val;
-  }
+    // 3. Ensure field name doesn't start with a number
+    if (/^[0-9]/.test(val)) {
+        val = '_' + val;
+    }
 
-  return val || '_empty';
+    return val || '_empty';
 }
 
 // Tree node interface
@@ -97,11 +98,11 @@ export function getSchema(): GraphQLSchema {
 
         const keys = Object.keys(node).sort();
         for (const key of keys) {
-            if (key.startsWith('_')) continue;
+            if (['_path', '_value', '_tree'].includes(key)) continue;
 
             const childNode = node[key] as TreeNode;
             // Check if child is a leaf or has children
-            const grandChildren = Object.keys(childNode).filter(k => !k.startsWith('_'));
+            const grandChildren = Object.keys(childNode).filter(k => !['_path', '_value', '_tree'].includes(k));
 
             if (grandChildren.length > 0) {
                 result[key] = buildTree(childNode);
@@ -123,10 +124,10 @@ export function getSchema(): GraphQLSchema {
         const keys = Object.keys(obj).sort();
 
         for (const key of keys) {
-            if (key.startsWith('_')) continue;
+            if (['_path', '_value', '_tree'].includes(key)) continue;
 
             const node = obj[key] as TreeNode;
-            const children = Object.keys(node).filter(k => !k.startsWith('_'));
+            const children = Object.keys(node).filter(k => !['_path', '_value', '_tree'].includes(k));
             const hasChildren = children.length > 0;
 
             // Resolve value from store dynamically
@@ -231,7 +232,7 @@ export function getSchema(): GraphQLSchema {
                     // although technically it is a collection of 1 item??
                     // Let's stick to the user's case: `notifications/123/ { id, expiresAt ... }`
                     // The child `123` has keys `id`, `expiresAt`.
-                    const firstChildProps = Object.keys(firstChildNode).filter(k => !k.startsWith('_'));
+                    const firstChildProps = Object.keys(firstChildNode).filter(k => !['_path', '_value', '_tree'].includes(k));
 
                     // Heuristic Refinement:
                     // Only treat as a "Collection" (List) if the keys look like IDs (start with specific chars)
@@ -254,8 +255,8 @@ export function getSchema(): GraphQLSchema {
                             // Check Homogeneity (Duck Typing)
                             const first = node[childKeys[0]] as TreeNode;
                             const second = node[childKeys[1]] as TreeNode;
-                            const keys1 = Object.keys(first).filter(k => !k.startsWith('_'));
-                            const keys2 = Object.keys(second).filter(k => !k.startsWith('_'));
+                            const keys1 = Object.keys(first).filter(k => !['_path', '_value', '_tree'].includes(k));
+                            const keys2 = Object.keys(second).filter(k => !['_path', '_value', '_tree'].includes(k));
 
                             // Intersection
                             const intersection = keys1.filter(k => keys2.includes(k));
@@ -348,7 +349,7 @@ export function getSchema(): GraphQLSchema {
                         resolve: (_: any, args: any) => {
                             // Parent node is `node` (the collection root).
                             // Children are `node[childKey]`.
-                            const childKeys = Object.keys(node).filter(k => !k.startsWith('_'));
+                            const childKeys = Object.keys(node).filter(k => !['_path', '_value', '_tree'].includes(k));
                             let items = childKeys.map(k => node[k] as TreeNode);
 
                             const { filterField, filterOp, filterValue } = args;
@@ -456,12 +457,12 @@ export function getSchema(): GraphQLSchema {
 
                 const keys = Object.keys(root).sort();
                 for (const key of keys) {
-                    if (key.startsWith('_')) continue;
+                    if (['_path', '_value', '_tree'].includes(key)) continue;
                     const node = root[key] as TreeNode;
                     // We need to generate a type for this top-level node
                     const typeName = `Root_${sanitize(key)}`;
                     // If it has children it's an object, else scalar
-                    const children = Object.keys(node).filter(k => !k.startsWith('_'));
+                    const children = Object.keys(node).filter(k => !['_path', '_value', '_tree'].includes(k));
 
                     if (children.length > 0) {
                         dynamicFields[sanitize(key)] = {
