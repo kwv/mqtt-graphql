@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "build": "bun build src/index.ts --compile --outfile=dist/server",
-    "test": "bun test",
-    "release": "npm version patch && git push origin main --tags"
+    "test": "bun test"
   },
   "keywords": [],
   "author": "",
