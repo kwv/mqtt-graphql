@@ -51,6 +51,10 @@ function sanitize(str: string) {
         val = '_' + val;
     }
 
+    // 4. Collapse any remaining double underscores to single underscore
+    // This prevents issues when concatenating names like "Root_" + "_ver" = "Root__ver"
+    val = val.replace(/__+/g, '_');
+
     return val || '_empty';
 }
 
@@ -142,7 +146,7 @@ export function getSchema(): GraphQLSchema {
                 // Feature: Generic Dynamic Filtering for Lists
                 // 1. Generate Type for Item based on first element (best effort)
                 const firstItem = rawValue[0];
-                const itemTypeName = `${name}_${sanitize(key)}_Item`;
+                const itemTypeName = sanitize(`${name}_${sanitize(key)}_Item`);
                 const itemFields: any = {};
 
                 Object.keys(firstItem).forEach(k => {
@@ -210,7 +214,7 @@ export function getSchema(): GraphQLSchema {
                 // we treat it as a potential collection.
                 // For simplicity, we'll try to generate a common item type based on the first child that is an object.
 
-                const childKeys = Object.keys(node).filter(k => !k.startsWith('_'));
+                const childKeys = Object.keys(node).filter(k => !['_path', '_value', '_tree'].includes(k));
                 const firstChildKey = childKeys.find(k => {
                     const c = node[k];
                     // Verify child is a TreeNode (object) and has its own structure (not just a path with scalar value)
@@ -299,7 +303,7 @@ export function getSchema(): GraphQLSchema {
                         isCollection = true;
 
                         // Generate Item Type
-                        const itemTypeName = `${name}_${sanitize(key)}_Item`;
+                        const itemTypeName = sanitize(`${name}_${sanitize(key)}_Item`);
 
                         const itemFields: any = {};
 
@@ -388,7 +392,7 @@ export function getSchema(): GraphQLSchema {
                     };
                 } else {
                     // Fallback to standard Object behavior (recurse)
-                    const typeName = `${name}_${sanitize(key)}`;
+                    const typeName = sanitize(`${name}_${sanitize(key)}`);
                     fields[sanitize(key)] = {
                         type: createType(typeName, node),
                         resolve: () => node
@@ -460,7 +464,7 @@ export function getSchema(): GraphQLSchema {
                     if (['_path', '_value', '_tree'].includes(key)) continue;
                     const node = root[key] as TreeNode;
                     // We need to generate a type for this top-level node
-                    const typeName = `Root_${sanitize(key)}`;
+                    const typeName = sanitize(`Root_${sanitize(key)}`);
                     // If it has children it's an object, else scalar
                     const children = Object.keys(node).filter(k => !['_path', '_value', '_tree'].includes(k));
 
