@@ -17,4 +17,5 @@ bump:
 	git checkout -b release-bump-$(shell date +%Y%m%d-%H%M%S)
 	npm version patch
 	git push origin HEAD --follow-tags
-	gh pr create --fill --base main --title "chore: release v$$(node -p 'require(\"./package.json\").version')"
+	@NEW_VERSION=$$(node -p "require('./package.json').version") && \
+		gh pr create --fill --base main --title "chore: release v$$NEW_VERSION"
